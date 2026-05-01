@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silsilah Keluarga</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+    
+    <style>
+        /* Variabel CSS untuk Kustomisasi Mudah */
+        :root {
+            --sidebar-bg: #0f172a;
+            --title-color: #60a5fa;
+            --menu-active-bg: #2563eb;
+        }
+
+        .custom-sidebar { background-color: var(--sidebar-bg) !important; }
+        .custom-title { color: var(--title-color) !important; }
+        .active-menu { background-color: var(--menu-active-bg) !important; color: white !important; }
+        
+        #tree-container svg { background-color: transparent !important; cursor: grab; }
+        #tree-container svg:active { cursor: grabbing; }
+        
+        .node-menu-container { position: absolute; bottom: 8px; right: 8px; }
+        .dots-btn { 
+            cursor: pointer; background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.05); 
+            width: 22px; height: 22px; border-radius: 4px; display: flex; 
+            align-items: center; justify-content: center; font-size: 12px; color: #475569;
+        }
+        .dots-btn:hover { background: #fff; color: #1e293b; }
+        .dropdown-content {
+            display: none; position: absolute; right: 0; bottom: 28px;
+            background-color: white; min-width: 100px; border: 1px solid #e2e8f0;
+            border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); z-index: 100;
+        }
+        .dropdown-content button {
+            width: 100%; text-align: left; padding: 6px 10px; font-size: 11px;
+            border: none; background: none; cursor: pointer; display: block; color: #1e293b;
+        }
+        .dropdown-content button:hover { background-color: #f8fafc; }
+        .show-menu { display: block !important; }
+
+        .zoom-controls {
+            position: absolute; bottom: 24px; right: 24px;
+            display: flex; flex-direction: column; gap: 8px; z-index: 50;
+        }
+        .btn-control {
+            width: 45px; height: 45px; background: white; border: 1px solid #e2e8f0;
+            border-radius: 9999px; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: all 0.2s; cursor: pointer; font-size: 18px;
+        }
+        .btn-control:hover { background-color: #f8fafc; transform: scale(1.05); }
+        .btn-primary-control { background-color: #2563eb; color: white; border: none; }
+
+        /* Floating Theme Settings */
+        #theme-editor {
+            position: fixed; bottom: 85px; right: 24px; width: 280px;
+            background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); z-index: 1000;
+            display: none; padding: 16px;
+        }
+        .btn-theme-toggle {
+            position: fixed; bottom: 24px; left: 24px;
+            width: 50px; height: 50px; border-radius: 50%; background: #1e293b; color: white;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            z-index: 1001; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; }
+        .modal-full { grid-column: span 2; }
+        .swal-label { font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 2px; display: block; }
+        .swal-input-compact { 
+            width: 100% !important; margin: 0 !important; font-size: 14px !important; 
+            padding: 8px !important; border-radius: 6px !important; border: 1px solid #d1d5db !important;
+        }
+        .photo-preview { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0; background: #f1f5f9; }
+        
+        .admin-only { display: none; }
+        body.is-admin .admin-only { display: block; }
+
+        #color-legend-content { max-height: 200px; overflow-y: auto; }
+        .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-size: 11px; color: #cbd5e1; }
+        .color-box { width: 12px; height: 12px; border-radius: 2px; shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans overflow-hidden">
+
+    <div id="floating-edit-btn" onclick="toggleThemeEditor()" class="btn-theme-toggle" title="Edit Tampilan">
+        ⚙️
+    </div>
+
+    <div id="theme-editor">
+        <h3 class="font-bold text-gray-800 mb-4 flex justify-between items-center">
+            Edit Tampilan 
+            <button onclick="toggleThemeEditor()" class="text-gray-400">✕</button>
+        </h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-gray-600 mb-1">NAMA KELUARGA / BANI</label>
+                <input type="text" id="input-family-name" oninput="updateTheme()" class="swal-input-compact" placeholder="Contoh: Bani Ridwan">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-600 mb-1">WARNA SIDEBAR</label>
+                <input type="color" id="color-sidebar" oninput="updateTheme()" class="w-full h-8 cursor-pointer rounded">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-600 mb-1">WARNA JUDUL TEKS</label>
+                <input type="color" id="color-title" oninput="updateTheme()" class="w-full h-8 cursor-pointer rounded">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-600 mb-1">WARNA MENU AKTIF</label>
+                <input type="color" id="color-menu" oninput="updateTheme()" class="w-full h-8 cursor-pointer rounded">
+            </div>
+            <hr>
+            <div class="flex items-center justify-between">
+                <label class="text-xs font-bold text-gray-600">TOMBOL EDIT (ON/OFF)</label>
+                <input type="checkbox" id="toggle-edit-vis" checked onchange="toggleEditButtonVisibility()" class="w-4 h-4">
+            </div>
+            <p class="text-[9px] text-gray-400 italic mt-2">*Pengaturan disimpan otomatis di browser Anda.</p>
+        </div>
+    </div>
+
+    <div class="h-screen flex">
+        <div class="w-64 custom-sidebar text-white flex flex-col shrink-0 transition-colors duration-300">
+            <div class="p-6 border-b border-gray-700/50">
+                <h1 id="display-family-name" class="text-xl font-bold custom-title transition-colors duration-300">Bani Ridwan</h1>
+                <p class="text-[10px] text-gray-400 uppercase tracking-widest">Family Tree System</p>
+                <div id="login-status" class="mt-2 text-[10px] py-1 px-2 rounded bg-slate-800 text-slate-400 inline-block">Mode: Visitor</div>
+            </div>
+            
+            <nav class="flex-1 p-4 space-y-2 mt-4 overflow-y-auto">
+                <button onclick="switchPage('tree')" id="menu-tree" class="menu-item w-full flex items-center py-3 px-4 rounded-lg transition active-menu">
+                    <span class="mr-3">🌳</span> Bagan Silsilah
+                </button>
+                <button onclick="switchPage('list')" id="menu-list" class="menu-item w-full flex items-center py-3 px-4 rounded-lg transition text-gray-300 hover:bg-white/10">
+                    <span class="mr-3">👥</span> Daftar Anggota
+                </button>
+
+                <div class="pt-4">
+                    <details class="bg-black/20 rounded-lg overflow-hidden border border-white/5">
+                        <summary class="text-xs p-3 cursor-pointer hover:bg-black/30 font-semibold text-gray-300">🎨 Warna Generasi (Pastel)</summary>
+                        <div id="color-legend-content" class="p-2 border-t border-white/5"></div>
+                    </details>
+                </div>
+            </nav>
+
+            <div class="p-4 border-t border-gray-700/50 space-y-2">
+                <button onclick="resetFocus()" class="w-full text-xs bg-blue-600 hover:bg-blue-500 py-2 rounded">🔄 Tampilkan Semua</button>
+                <div class="admin-only space-y-2">
+                    <button onclick="exportData()" class="w-full text-xs bg-emerald-700 hover:bg-emerald-600 py-2 rounded">📥 Backup Data (JSON)</button>
+                    <input type="file" id="importFile" class="hidden" accept=".json" onchange="importData(event)">
+                    <button onclick="document.getElementById('importFile').click()" class="w-full text-xs bg-amber-700 hover:bg-amber-600 py-2 rounded">📤 Restore dari JSON</button>
+                    <button onclick="resetData()" class="w-full text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 py-2 rounded">⚠️ Reset Semua</button>
+                </div>
+                <button id="auth-btn" onclick="handleAuth()" class="w-full text-xs border border-gray-600 hover:bg-black/20 py-2 rounded text-gray-300">🔑 Login Admin</button>
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col min-w-0">
+            <header class="bg-white shadow-sm px-8 py-4 flex justify-between items-center">
+                <h2 id="page-title" class="text-xl font-semibold text-gray-800">Bagan Silsilah</h2>
+                <div id="stats-count" class="text-sm font-medium bg-blue-50 text-blue-700 px-3 py-1 rounded-full"></div>
+            </header>
+
+            <main class="flex-1 p-6 overflow-auto relative">
+                <div id="page-tree" class="page-content h-full">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 h-full flex flex-col relative">
+                        <div class="zoom-controls">
+                            <button onclick="chart.zoomIn()" class="btn-control">+</button>
+                            <button onclick="chart.zoomOut()" class="btn-control">−</button>
+                            <button onclick="centerTree()" class="btn-control btn-primary-control">🎯</button>
+                        </div>
+                        <div id="tree-container" class="flex-1 w-full bg-slate-50 rounded-xl overflow-hidden"></div>
+                    </div>
+                </div>
+
+                <div id="page-list" class="page-content hidden">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                        <table id="familyTable" class="display w-full">
+                            <thead>
+                                <tr><th>Nama</th><th>Generasi</th><th>Keluarga</th><th>Aksi</th></tr>
+                            </thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-org-chart@3.1.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-flextree@2.1.2/build/d3-flextree.js"></script>
+
+    <script>
+        const ADMIN_PASSWORD = "admin123";
+        let isAdmin = sessionStorage.getItem('is_admin_logged') === 'true';
+        let currentRootId = null; // Menyimpan ID root yang sedang difokuskan
+
+        // THEME MANAGEMENT
+        const THEME_KEY = 'BANI_RIDWAN_THEME_SETTINGS';
+        let themeSettings = JSON.parse(localStorage.getItem(THEME_KEY)) || {
+            familyName: 'Bani Ridwan',
+            sidebarBg: '#0f172a',
+            titleColor: '#60a5fa',
+            menuBg: '#2563eb',
+            isEditVisible: true
+        };
+
+        function initTheme() {
+            document.documentElement.style.setProperty('--sidebar-bg', themeSettings.sidebarBg);
+            document.documentElement.style.setProperty('--title-color', themeSettings.titleColor);
+            document.documentElement.style.setProperty('--menu-active-bg', themeSettings.menuBg);
+            $('#display-family-name').text(themeSettings.familyName || 'Bani Keluarga');
+            document.title = "Silsilah " + (themeSettings.familyName || 'Keluarga');
+            $('#input-family-name').val(themeSettings.familyName);
+            $('#color-sidebar').val(themeSettings.sidebarBg);
+            $('#color-title').val(themeSettings.titleColor);
+            $('#color-menu').val(themeSettings.menuBg);
+            $('#toggle-edit-vis').prop('checked', themeSettings.isEditVisible);
+            if(!themeSettings.isEditVisible) $('#floating-edit-btn').css('opacity', '0.05');
+        }
+
+        function toggleThemeEditor() { $('#theme-editor').fadeToggle(200); }
+
+        function updateTheme() {
+            themeSettings.familyName = $('#input-family-name').val();
+            themeSettings.sidebarBg = $('#color-sidebar').val();
+            themeSettings.titleColor = $('#color-title').val();
+            themeSettings.menuBg = $('#color-menu').val();
+            $('#display-family-name').text(themeSettings.familyName || 'Bani Keluarga');
+            document.title = "Silsilah " + (themeSettings.familyName || 'Keluarga');
+            document.documentElement.style.setProperty('--sidebar-bg', themeSettings.sidebarBg);
+            document.documentElement.style.setProperty('--title-color', themeSettings.titleColor);
+            document.documentElement.style.setProperty('--menu-active-bg', themeSettings.menuBg);
+            localStorage.setItem(THEME_KEY, JSON.stringify(themeSettings));
+        }
+
+        function toggleEditButtonVisibility() {
+            themeSettings.isEditVisible = $('#toggle-edit-vis').is(':checked');
+            $('#floating-edit-btn').css('opacity', themeSettings.isEditVisible ? '1' : '0.05');
+            localStorage.setItem(THEME_KEY, JSON.stringify(themeSettings));
+        }
+
+        // --- LOGIC SILSILAH ---
+        const generationColors = [
+            "#F1F5F9", "#DBEAFE", "#D1FAE5", "#FEF3C7", "#EDE9FE", "#FCE7F3", "#CCFBF1", "#FFEDD5", "#E0E7FF", "#FEE2E2",
+            "#CFFAFE", "#DCFCE7", "#F3E8FF", "#FAE8FF", "#F3F4F6", "#D1FAE5", "#FEF3C7", "#E0E7FF", "#FFE4E6", "#E0F2FE",
+            "#ECFDF5", "#F5F3FF", "#FFF1F2", "#FAFAF9", "#F0F9FF", "#F7FEE7", "#FAF5FF", "#FFF0F6", "#F8FAFC", "#F0FDF4"
+        ];
+
+        function getGenColor(genString) {
+            const genNum = parseInt(genString.replace(/\D/g, ""));
+            return generationColors[(genNum - 1) % 30] || "#F8FAFC";
+        }
+
+        function checkAuth() {
+            if (isAdmin) {
+                $('body').addClass('is-admin');
+                $('#login-status').text('Mode: Admin').addClass('bg-blue-900/50 text-blue-300');
+                $('#auth-btn').text('🚪 Logout').addClass('text-red-400');
+            } else {
+                $('body').removeClass('is-admin');
+                $('#login-status').text('Mode: Visitor').removeClass('bg-blue-900/50 text-blue-300');
+                $('#auth-btn').text('🔑 Login Admin').removeClass('text-red-400');
+            }
+        }
+
+        async function handleAuth() {
+            if (isAdmin) {
+                isAdmin = false;
+                sessionStorage.removeItem('is_admin_logged');
+                location.reload();
+            } else {
+                const { value: password } = await Swal.fire({
+                    title: 'Login Admin',
+                    input: 'password',
+                    inputPlaceholder: 'Masukkan password',
+                    showCancelButton: true
+                });
+                if (password === ADMIN_PASSWORD) {
+                    isAdmin = true;
+                    sessionStorage.setItem('is_admin_logged', 'true');
+                    Swal.fire('Berhasil!', 'Mode Admin Aktif.', 'success').then(() => location.reload());
+                } else if (password) {
+                    Swal.fire('Error', 'Password salah!', 'error');
+                }
+            }
+        }
+
+        const STORAGE_KEY = 'SILSILAH_BANI_RIDWAN_DATA';
+        const defaultData = [
+            { id: "1", parentId: null, name: "Kepala Keluarga", role: "Generasi 1", alamat: "", tglLahir: "", tmpLahir: "", statusNikah: "menikah", pasangan: "", phone: "", statusHidup: "hidup", foto: "" }
+        ];
+
+        let familyData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultData;
+        let chart = null;
+
+        function saveData() {
+            if (!isAdmin) return;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(familyData));
+            updateStats();
+        }
+
+        function generateGenOptions(selected) {
+            let options = '';
+            for(let i=1; i<=30; i++) {
+                options += `<option value="Generasi ${i}" ${selected === 'Generasi ' + i ? 'selected' : ''}>Generasi ${i}</option>`;
+            }
+            return options;
+        }
+
+        function initColorLegend() {
+            let html = '';
+            for(let i=1; i<=30; i++) html += `<div class="legend-item"><div class="color-box" style="background:${generationColors[i-1]}"></div><span>Generasi ${i}</span></div>`;
+            $('#color-legend-content').html(html);
+        }
+
+        $(document).ready(function() {
+            initTheme();
+            checkAuth();
+            initColorLegend();
+            setTimeout(() => { initChart(); updateStats(); }, 500);
+            $(window).click((e) => {
+                if(!$(e.target).closest('.node-menu-container').length) $('.dropdown-content').removeClass('show-menu');
+                if(!$(e.target).closest('#theme-editor, #floating-edit-btn').length) $('#theme-editor').fadeOut(200);
+            });
+        });
+
+        function initChart() {
+            if (!chart) { chart = new d3.OrgChart(); }
+            chart.container('#tree-container').data(familyData).nodeWidth((d) => 210).nodeHeight((d) => 95).compact(false)
+                .onNodeClick((d) => { if (!event.target.closest('.node-menu-container')) showDetail(d.id); })
+                .nodeContent(function(d) {
+                    const bgColor = getGenColor(d.data.role);
+                    const img = d.data.foto ? `<img src="${d.data.foto}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid rgba(0,0,0,0.1);">` : `<div style="width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;font-size:7px;color:#94a3b8">N/A</div>`;
+                    const menuHtml = isAdmin ? `
+                        <div class="node-menu-container">
+                            <div class="dots-btn" onclick="toggleNodeMenu(event, '${d.data.id}')">⋮</div>
+                            <div id="menu-${d.data.id}" class="dropdown-content">
+                                <button onclick="addMember('${d.data.id}')" style="color:#2563eb;">➕ Tambah</button>
+                                <button onclick="deleteMember('${d.data.id}')" style="color:#be123c;">🗑️ Hapus</button>
+                            </div>
+                        </div>
+                    ` : '';
+                    
+                    return `<div style="font-family:Inter;background:${bgColor};border:1px solid rgba(0,0,0,0.08);height:100%;border-radius:8px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,0.05);position:relative;overflow:hidden;">
+                        <div style="display:flex;gap:8px;align-items:flex-start">
+                            ${img}
+                            <div style="flex:1; min-width:0;">
+                                <div style="color:#64748b;font-size:7px;font-weight:700;text-transform:uppercase;margin-bottom:1px;">${d.data.role} ${d.data.statusHidup === 'meninggal' ? '🕊️' : ''}</div>
+                                <div style="color:#1e293b;font-size:12px;font-weight:bold;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.data.name}</div>
+                                <div style="color:#475569;font-size:8.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Ps: ${d.data.pasangan || '-'}</div>
+                                <div style="color:#2563eb;font-size:8.5px;font-weight:500;">📞 ${d.data.phone || '-'}</div>
+                            </div>
+                        </div>
+                        ${menuHtml}
+                    </div>`;
+                }).render().fit();
+        }
+
+        // --- FUNGSI DATA ---
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) { familyData = importedData; saveData(); location.reload(); }
+                } catch (err) { Swal.fire('Error', 'Gagal membaca file.', 'error'); }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportData() {
+            const dataStr = JSON.stringify(familyData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const dl = document.createElement('a');
+            dl.setAttribute('href', dataUri);
+            dl.setAttribute('download', 'silsilah_data_' + new Date().toLocaleDateString() + '.json');
+            dl.click();
+        }
+
+        function zoomPhoto(imgSrc) {
+            if(!imgSrc || imgSrc.includes('placeholder')) return;
+            Swal.fire({ imageUrl: imgSrc, imageAlt: 'Foto Profil', showConfirmButton: false, showCloseButton: true, width: 'auto', background: 'transparent', customClass: { image: 'max-h-[80vh] rounded-lg shadow-2xl' } });
+        }
+
+        async function showDetail(id) {
+            const member = familyData.find(m => m.id === id);
+            if (!member) return;
+            if (!isAdmin) {
+                Swal.fire({
+                    title: member.name,
+                    html: `<div class="text-left text-sm space-y-1"><img src="${member.foto || ''}" class="w-24 h-24 rounded-full mx-auto mb-4 border cursor-zoom-in" onclick="zoomPhoto(this.src)" onerror="this.src='https://via.placeholder.com/90'"><p><b>Generasi:</b> ${member.role}</p><p><b>Tempat Lahir:</b> ${member.tmpLahir || '-'}</p><p><b>Tgl Lahir:</b> ${member.tglLahir || '-'}</p><p><b>No HP:</b> ${member.phone || '-'}</p><p><b>Nama Pasangan:</b> ${member.pasangan || '-'}</p><p><b>Status Hidup:</b> ${member.statusHidup}</p><p><b>Alamat:</b> ${member.alamat || '-'}</p></div>`,
+                    confirmButtonText: 'Tutup'
+                });
+                return;
+            }
+            const { value: fV } = await Swal.fire({
+                title: 'Edit Profil (Admin)',
+                width: '600px',
+                html: `<div class="photo-preview-container"><img src="${member.foto || ''}" class="photo-preview cursor-zoom-in" id="preview-img" onclick="zoomPhoto(this.src)" onerror="this.src='https://via.placeholder.com/90?text=No+Photo'"><input type="file" id="swal-file" accept="image/*" class="text-xs mt-2" onchange="previewFile()"></div><div class="modal-grid"><div class="modal-full"><label class="swal-label">Nama Lengkap</label><input id="swal-name" class="swal-input-compact" value="${member.name || ''}"></div><div class="modal-full"><label class="swal-label">Generasi</label><select id="swal-role" class="swal-input-compact">${generateGenOptions(member.role)}</select></div><div class="modal-full"><label class="swal-label">Alamat</label><input id="swal-alamat" class="swal-input-compact" value="${member.alamat || ''}"></div><div><label class="swal-label">Tempat Lahir</label><input id="swal-tmp" class="swal-input-compact" value="${member.tmpLahir || ''}"></div><div><label class="swal-label">Tanggal Lahir</label><input id="swal-tgl" type="date" class="swal-input-compact" value="${member.tglLahir || ''}"></div><div><label class="swal-label">Status Kehidupan</label><select id="swal-hidup" class="swal-input-compact"><option value="hidup" ${member.statusHidup==='hidup'?'selected':''}>Hidup</option><option value="meninggal" ${member.statusHidup==='meninggal'?'selected':''}>Meninggal</option></select></div><div><label class="swal-label">No HP</label><input id="swal-phone" class="swal-input-compact" value="${member.phone || ''}"></div><div class="modal-full"><label class="swal-label">Nama Pasangan</label><input id="swal-pasangan" class="swal-input-compact" value="${member.pasangan || ''}"></div></div>`,
+                confirmButtonText: 'Simpan',
+                showCancelButton: true,
+                preConfirm: () => ({
+                    name: document.getElementById('swal-name').value,
+                    role: document.getElementById('swal-role').value,
+                    alamat: document.getElementById('swal-alamat').value,
+                    tmpLahir: document.getElementById('swal-tmp').value,
+                    tglLahir: document.getElementById('swal-tgl').value,
+                    statusHidup: document.getElementById('swal-hidup').value,
+                    phone: document.getElementById('swal-phone').value,
+                    pasangan: document.getElementById('swal-pasangan').value,
+                    foto: document.getElementById('preview-img').src
+                })
+            });
+            if (fV) { 
+                Object.assign(member, fV); 
+                saveData(); 
+                // Logika: Jangan reset data secara global jika sedang mem-filter (currentRootId tidak null)
+                if(currentRootId) {
+                    refreshFilteredView();
+                } else {
+                    chart.data(familyData).render(); 
+                }
+                renderTable(); 
+            }
+        }
+
+        async function addMember(pid) {
+            if (!isAdmin) return;
+            const parent = familyData.find(m => m.id === pid);
+            let suggestedGen = "Generasi 2";
+            if(parent && parent.role.includes("Generasi")) suggestedGen = "Generasi " + (parseInt(parent.role.split(" ")[1]) + 1);
+            const {value:v}=await Swal.fire({ title:'Tambah Anggota', html:`<label class="swal-label text-left">Nama Lengkap</label><input id="n" class="swal-input-compact mb-3" placeholder="Nama"><label class="swal-label text-left">Generasi</label><select id="r" class="swal-input-compact">${generateGenOptions(suggestedGen)}</select>`, preConfirm:()=>({name:$('#n').val(), role:$('#r').val()}) });
+            if(v&&v.name){ 
+                familyData.push({id:"ID-"+Date.now(), parentId:pid, name:v.name, role:v.role, statusHidup:'hidup', foto:"", pasangan: "", phone: ""}); 
+                saveData(); 
+                if(currentRootId) refreshFilteredView(); else chart.data(familyData).render().fit();
+                renderTable(); 
+            } 
+        }
+
+        function focusOnMember(id) { 
+            switchPage('tree'); 
+            currentRootId = id; 
+            refreshFilteredView();
+        }
+
+        function refreshFilteredView() {
+            if(!currentRootId) return;
+            const sm = familyData.find(m => m.id === currentRootId);
+            if (!sm) return;
+            const fd = [{ ...sm, parentId: null }, ...familyData.filter(m => isDescendant(currentRootId, m.id))];
+            chart.data(fd).render().fit();
+        }
+
+        function isDescendant(rootId, targetId) { let c = familyData.find(m => m.id === targetId); while (c && c.parentId) { if (c.parentId === rootId) return true; c = familyData.find(m => m.id === c.parentId); } return false; }
+        
+        function resetFocus() { 
+            currentRootId = null; 
+            chart.data(familyData).render().fit(); 
+            switchPage('tree'); 
+        }
+
+        function toggleNodeMenu(e, id) { e.stopPropagation(); $('.dropdown-content').not(`#menu-${id}`).removeClass('show-menu'); $(`#menu-${id}`).toggleClass('show-menu'); }
+        
+        function deleteMember(id) { 
+            if (!isAdmin) return; 
+            Swal.fire({title:'Hapus?', icon:'warning', showCancelButton:true}).then(r => { 
+                if(r.isConfirmed) { 
+                    const ids = [id]; 
+                    const findC = (pid) => familyData.filter(d=>d.parentId===pid).forEach(c=>{ids.push(c.id); findC(c.id);}); 
+                    findC(id); 
+                    familyData = familyData.filter(d=>!ids.includes(d.id)); 
+                    saveData(); 
+                    if(currentRootId === id) currentRootId = null;
+                    if(currentRootId) refreshFilteredView(); else chart.data(familyData).render().fit();
+                    renderTable(); 
+                }
+            }); 
+        }
+
+        function previewFile() { const f = document.getElementById('swal-file').files[0]; const r = new FileReader(); r.onloadend = () => document.getElementById('preview-img').src = r.result; if (f) r.readAsDataURL(f); }
+        function resetData() { Swal.fire({title:'Reset?', icon:'error', showCancelButton:true}).then(r => { if(r.isConfirmed) { localStorage.removeItem(STORAGE_KEY); location.reload(); }}); }
+        function centerTree() { if (chart) chart.fit(); }
+        function updateStats() { $('#stats-count').text(familyData.length + " Anggota"); }
+        function switchPage(p) { $('.page-content').addClass('hidden'); $(`#page-${p}`).removeClass('hidden'); $('.menu-item').removeClass('active-menu'); $(`#menu-${p}`).addClass('active-menu'); if (p === 'list') renderTable(); $('#page-title').text(p === 'tree' ? 'Bagan Silsilah' : 'Daftar Anggota'); }
+        
+        function renderTable() { 
+            if ($.fn.DataTable.isDataTable('#familyTable')) $('#familyTable').DataTable().destroy(); 
+            let html = ''; 
+            familyData.forEach(m => { 
+                let p = familyData.find(f => f.id === m.parentId); 
+                const actionHtml = isAdmin ? `<button onclick="showDetail('${m.id}')" class="text-blue-600 mr-2 text-xs">Edit</button><button onclick="deleteMember('${m.id}')" class="text-red-600 text-xs">Hapus</button>` : `<span class="text-gray-400 text-xs italic">Read Only</span>`; 
+                html += `<tr><td><button onclick="focusOnMember('${m.id}')" class="font-bold text-blue-600 hover:underline text-left">${m.name}</button></td><td>${m.role}</td><td>${p?p.name:'-'}</td><td>${actionHtml}</td></tr>`; 
+            }); 
+            $('#tableBody').html(html); 
+            $('#familyTable').DataTable(); 
+        }
+    </script>
+</body>
+</html>
