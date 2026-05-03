@@ -470,7 +470,12 @@
             chart.data(fd).render().fit();
         }
         function isDescendant(rootId, targetId) { let c = familyData.find(m => m.id === targetId); while (c && c.parentId) { if (c.parentId === rootId) return true; c = familyData.find(m => m.id === c.parentId); } return false; }
-        function resetFocus() { currentRootId = null; chart.data(familyData).render().fit(); switchPage('tree'); }
+        function resetFocus() { 
+    currentRootId = null; 
+    // Mengatur ulang data ke seluruh anggota, merender, membuka semua cabang, dan memposisikan di tengah
+    chart.data(familyData).render().expandAll().fit(); 
+    switchPage('tree'); 
+}
         function toggleNodeMenu(e, id) { e.stopPropagation(); $('.dropdown-content').not(`#menu-${id}`).removeClass('show-menu'); $(`#menu-${id}`).toggleClass('show-menu'); }
         
         function deleteMember(id) { 
