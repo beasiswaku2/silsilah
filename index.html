@@ -199,10 +199,10 @@
 
     <script>
         const ADMIN_PASSWORD = "admin123";
+        const PHOTO_FOLDER = "foto/"; // FOLDER TUJUAN FOTO
         let isAdmin = sessionStorage.getItem('is_admin_logged') === 'true';
-        let currentRootId = null; // Menyimpan ID root yang sedang difokuskan
+        let currentRootId = null;
 
-        // THEME MANAGEMENT
         const THEME_KEY = 'BANI_RIDWAN_THEME_SETTINGS';
         let themeSettings = JSON.parse(localStorage.getItem(THEME_KEY)) || {
             familyName: 'Bani Ridwan',
@@ -234,7 +234,6 @@
             themeSettings.titleColor = $('#color-title').val();
             themeSettings.menuBg = $('#color-menu').val();
             $('#display-family-name').text(themeSettings.familyName || 'Bani Keluarga');
-            document.title = "Silsilah " + (themeSettings.familyName || 'Keluarga');
             document.documentElement.style.setProperty('--sidebar-bg', themeSettings.sidebarBg);
             document.documentElement.style.setProperty('--title-color', themeSettings.titleColor);
             document.documentElement.style.setProperty('--menu-active-bg', themeSettings.menuBg);
@@ -247,16 +246,14 @@
             localStorage.setItem(THEME_KEY, JSON.stringify(themeSettings));
         }
 
-        // --- LOGIC SILSILAH ---
         const generationColors = [
             "#F1F5F9", "#DBEAFE", "#D1FAE5", "#FEF3C7", "#EDE9FE", "#FCE7F3", "#CCFBF1", "#FFEDD5", "#E0E7FF", "#FEE2E2",
-            "#CFFAFE", "#DCFCE7", "#F3E8FF", "#FAE8FF", "#F3F4F6", "#D1FAE5", "#FEF3C7", "#E0E7FF", "#FFE4E6", "#E0F2FE",
-            "#ECFDF5", "#F5F3FF", "#FFF1F2", "#FAFAF9", "#F0F9FF", "#F7FEE7", "#FAF5FF", "#FFF0F6", "#F8FAFC", "#F0FDF4"
+            "#CFFAFE", "#DCFCE7", "#F3E8FF", "#FAE8FF", "#F3F4F6", "#D1FAE5", "#FEF3C7", "#E0E7FF", "#FFE4E6", "#E0F2FE"
         ];
 
         function getGenColor(genString) {
             const genNum = parseInt(genString.replace(/\D/g, ""));
-            return generationColors[(genNum - 1) % 30] || "#F8FAFC";
+            return generationColors[(genNum - 1) % generationColors.length] || "#F8FAFC";
         }
 
         function checkAuth() {
@@ -317,7 +314,7 @@
 
         function initColorLegend() {
             let html = '';
-            for(let i=1; i<=30; i++) html += `<div class="legend-item"><div class="color-box" style="background:${generationColors[i-1]}"></div><span>Generasi ${i}</span></div>`;
+            for(let i=1; i<=20; i++) html += `<div class="legend-item"><div class="color-box" style="background:${generationColors[i-1]}"></div><span>Generasi ${i}</span></div>`;
             $('#color-legend-content').html(html);
         }
 
@@ -332,13 +329,21 @@
             });
         });
 
+        function getFullPhotoPath(filename) {
+            if(!filename || filename === "") return "https://via.placeholder.com/90?text=No+Photo";
+            if(filename.startsWith('http') || filename.startsWith('data:')) return filename;
+            return PHOTO_FOLDER + filename;
+        }
+
         function initChart() {
             if (!chart) { chart = new d3.OrgChart(); }
             chart.container('#tree-container').data(familyData).nodeWidth((d) => 210).nodeHeight((d) => 95).compact(false)
                 .onNodeClick((d) => { if (!event.target.closest('.node-menu-container')) showDetail(d.id); })
                 .nodeContent(function(d) {
                     const bgColor = getGenColor(d.data.role);
-                    const img = d.data.foto ? `<img src="${d.data.foto}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid rgba(0,0,0,0.1);">` : `<div style="width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:center;font-size:7px;color:#94a3b8">N/A</div>`;
+                    const photoUrl = getFullPhotoPath(d.data.foto);
+                    const img = `<img src="${photoUrl}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid rgba(0,0,0,0.1);" onerror="this.src='https://via.placeholder.com/40?text=NA'">`;
+                    
                     const menuHtml = isAdmin ? `
                         <div class="node-menu-container">
                             <div class="dots-btn" onclick="toggleNodeMenu(event, '${d.data.id}')">⋮</div>
@@ -364,117 +369,112 @@
                 }).render().fit();
         }
 
-        // --- FUNGSI DATA ---
-        function importData(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const importedData = JSON.parse(e.target.result);
-                    if (Array.isArray(importedData)) { familyData = importedData; saveData(); location.reload(); }
-                } catch (err) { Swal.fire('Error', 'Gagal membaca file.', 'error'); }
-            };
-            reader.readAsText(file);
-        }
-
-        function exportData() {
-            const dataStr = JSON.stringify(familyData, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            const dl = document.createElement('a');
-            dl.setAttribute('href', dataUri);
-            dl.setAttribute('download', 'silsilah_data_' + new Date().toLocaleDateString() + '.json');
-            dl.click();
-        }
-
-        function zoomPhoto(imgSrc) {
-            if(!imgSrc || imgSrc.includes('placeholder')) return;
-            Swal.fire({ imageUrl: imgSrc, imageAlt: 'Foto Profil', showConfirmButton: false, showCloseButton: true, width: 'auto', background: 'transparent', customClass: { image: 'max-h-[80vh] rounded-lg shadow-2xl' } });
-        }
-
         async function showDetail(id) {
             const member = familyData.find(m => m.id === id);
             if (!member) return;
+            const photoUrl = getFullPhotoPath(member.foto);
+
             if (!isAdmin) {
                 Swal.fire({
                     title: member.name,
-                    html: `<div class="text-left text-sm space-y-1"><img src="${member.foto || ''}" class="w-24 h-24 rounded-full mx-auto mb-4 border cursor-zoom-in" onclick="zoomPhoto(this.src)" onerror="this.src='https://via.placeholder.com/90'"><p><b>Generasi:</b> ${member.role}</p><p><b>Tempat Lahir:</b> ${member.tmpLahir || '-'}</p><p><b>Tgl Lahir:</b> ${member.tglLahir || '-'}</p><p><b>No HP:</b> ${member.phone || '-'}</p><p><b>Nama Pasangan:</b> ${member.pasangan || '-'}</p><p><b>Status Hidup:</b> ${member.statusHidup}</p><p><b>Alamat:</b> ${member.alamat || '-'}</p></div>`,
+                    html: `<div class="text-left text-sm space-y-1">
+                        <img src="${photoUrl}" class="w-24 h-24 rounded-full mx-auto mb-4 border cursor-pointer" onclick="zoomPhoto(this.src)" onerror="this.src='https://via.placeholder.com/90'">
+                        <p><b>Generasi:</b> ${member.role}</p>
+                        <p><b>Tempat Lahir:</b> ${member.tmpLahir || '-'}</p>
+                        <p><b>Tgl Lahir:</b> ${member.tglLahir || '-'}</p>
+                        <p><b>No HP:</b> ${member.phone || '-'}</p>
+                        <p><b>Nama Pasangan:</b> ${member.pasangan || '-'}</p>
+                        <p><b>Status Hidup:</b> ${member.statusHidup}</p>
+                        <p><b>Alamat:</b> ${member.alamat || '-'}</p>
+                    </div>`,
                     confirmButtonText: 'Tutup'
                 });
                 return;
             }
+
             const { value: fV } = await Swal.fire({
                 title: 'Edit Profil (Admin)',
                 width: '600px',
-                html: `<div class="photo-preview-container"><img src="${member.foto || ''}" class="photo-preview cursor-zoom-in" id="preview-img" onclick="zoomPhoto(this.src)" onerror="this.src='https://via.placeholder.com/90?text=No+Photo'"><input type="file" id="swal-file" accept="image/*" class="text-xs mt-2" onchange="previewFile()"></div><div class="modal-grid"><div class="modal-full"><label class="swal-label">Nama Lengkap</label><input id="swal-name" class="swal-input-compact" value="${member.name || ''}"></div><div class="modal-full"><label class="swal-label">Generasi</label><select id="swal-role" class="swal-input-compact">${generateGenOptions(member.role)}</select></div><div class="modal-full"><label class="swal-label">Alamat</label><input id="swal-alamat" class="swal-input-compact" value="${member.alamat || ''}"></div><div><label class="swal-label">Tempat Lahir</label><input id="swal-tmp" class="swal-input-compact" value="${member.tmpLahir || ''}"></div><div><label class="swal-label">Tanggal Lahir</label><input id="swal-tgl" type="date" class="swal-input-compact" value="${member.tglLahir || ''}"></div><div><label class="swal-label">Status Kehidupan</label><select id="swal-hidup" class="swal-input-compact"><option value="hidup" ${member.statusHidup==='hidup'?'selected':''}>Hidup</option><option value="meninggal" ${member.statusHidup==='meninggal'?'selected':''}>Meninggal</option></select></div><div><label class="swal-label">No HP</label><input id="swal-phone" class="swal-input-compact" value="${member.phone || ''}"></div><div class="modal-full"><label class="swal-label">Nama Pasangan</label><input id="swal-pasangan" class="swal-input-compact" value="${member.pasangan || ''}"></div></div>`,
+                html: `
+                    <div class="photo-preview-container">
+                        <img src="${photoUrl}" class="photo-preview mx-auto" id="preview-img" onerror="this.src='https://via.placeholder.com/90?text=No+Photo'">
+                        <div class="mt-2">
+                            <label class="swal-label">Nama File Foto (di folder /foto/)</label>
+                            <input id="swal-foto-name" class="swal-input-compact" placeholder="contoh: budi.jpg" value="${member.foto || ''}" oninput="updatePreviewInput(this.value)">
+                        </div>
+                    </div>
+                    <div class="modal-grid mt-4">
+                        <div class="modal-full"><label class="swal-label">Nama Lengkap</label><input id="swal-name" class="swal-input-compact" value="${member.name || ''}"></div>
+                        <div class="modal-full"><label class="swal-label">Generasi</label><select id="swal-role" class="swal-input-compact">${generateGenOptions(member.role)}</select></div>
+                        <div class="modal-full"><label class="swal-label">Alamat</label><input id="swal-alamat" class="swal-input-compact" value="${member.alamat || ''}"></div>
+                        <div><label class="swal-label">Tempat Lahir</label><input id="swal-tmp" class="swal-input-compact" value="${member.tmpLahir || ''}"></div>
+                        <div><label class="swal-label">Tanggal Lahir</label><input id="swal-tgl" type="date" class="swal-input-compact" value="${member.tglLahir || ''}"></div>
+                        <div><label class="swal-label">Status Hidup</label><select id="swal-hidup" class="swal-input-compact"><option value="hidup" ${member.statusHidup==='hidup'?'selected':''}>Hidup</option><option value="meninggal" ${member.statusHidup==='meninggal'?'selected':''}>Meninggal</option></select></div>
+                        <div><label class="swal-label">No HP</label><input id="swal-phone" class="swal-input-compact" value="${member.phone || ''}"></div>
+                        <div class="modal-full"><label class="swal-label">Nama Pasangan</label><input id="swal-pasangan" class="swal-input-compact" value="${member.pasangan || ''}"></div>
+                    </div>`,
                 confirmButtonText: 'Simpan',
                 showCancelButton: true,
                 preConfirm: () => ({
-                    name: document.getElementById('swal-name').value,
-                    role: document.getElementById('swal-role').value,
-                    alamat: document.getElementById('swal-alamat').value,
-                    tmpLahir: document.getElementById('swal-tmp').value,
-                    tglLahir: document.getElementById('swal-tgl').value,
-                    statusHidup: document.getElementById('swal-hidup').value,
-                    phone: document.getElementById('swal-phone').value,
-                    pasangan: document.getElementById('swal-pasangan').value,
-                    foto: document.getElementById('preview-img').src
+                    name: $('#swal-name').val(),
+                    role: $('#swal-role').val(),
+                    alamat: $('#swal-alamat').val(),
+                    tmpLahir: $('#swal-tmp').val(),
+                    tglLahir: $('#swal-tgl').val(),
+                    statusHidup: $('#swal-hidup').val(),
+                    phone: $('#swal-phone').val(),
+                    pasangan: $('#swal-pasangan').val(),
+                    foto: $('#swal-foto-name').val()
                 })
             });
+
             if (fV) { 
                 Object.assign(member, fV); 
                 saveData(); 
-                // Logika: Jangan reset data secara global jika sedang mem-filter (currentRootId tidak null)
-                if(currentRootId) {
-                    refreshFilteredView();
-                } else {
-                    chart.data(familyData).render(); 
-                }
+                currentRootId ? refreshFilteredView() : chart.data(familyData).render(); 
                 renderTable(); 
             }
         }
 
+        function updatePreviewInput(val) {
+            $('#preview-img').attr('src', getFullPhotoPath(val));
+        }
+
         async function addMember(pid) {
-            if (!isAdmin) return;
             const parent = familyData.find(m => m.id === pid);
             let suggestedGen = "Generasi 2";
             if(parent && parent.role.includes("Generasi")) suggestedGen = "Generasi " + (parseInt(parent.role.split(" ")[1]) + 1);
-            const {value:v}=await Swal.fire({ title:'Tambah Anggota', html:`<label class="swal-label text-left">Nama Lengkap</label><input id="n" class="swal-input-compact mb-3" placeholder="Nama"><label class="swal-label text-left">Generasi</label><select id="r" class="swal-input-compact">${generateGenOptions(suggestedGen)}</select>`, preConfirm:()=>({name:$('#n').val(), role:$('#r').val()}) });
-            if(v&&v.name){ 
+            const {value:v}=await Swal.fire({ 
+                title:'Tambah Anggota', 
+                html:`<label class="swal-label text-left">Nama Lengkap</label><input id="n" class="swal-input-compact mb-3" placeholder="Nama">
+                      <label class="swal-label text-left">Generasi</label><select id="r" class="swal-input-compact">${generateGenOptions(suggestedGen)}</select>`, 
+                preConfirm:()=>({name:$('#n').val(), role:$('#r').val()}) 
+            });
+            if(v && v.name){ 
                 familyData.push({id:"ID-"+Date.now(), parentId:pid, name:v.name, role:v.role, statusHidup:'hidup', foto:"", pasangan: "", phone: ""}); 
                 saveData(); 
-                if(currentRootId) refreshFilteredView(); else chart.data(familyData).render().fit();
+                currentRootId ? refreshFilteredView() : chart.data(familyData).render().fit();
                 renderTable(); 
             } 
         }
 
-        function focusOnMember(id) { 
-            switchPage('tree'); 
-            currentRootId = id; 
-            refreshFilteredView();
+        function zoomPhoto(src) {
+            Swal.fire({ imageUrl: src, showConfirmButton: false, showCloseButton: true, background: 'transparent' });
         }
 
+        function focusOnMember(id) { switchPage('tree'); currentRootId = id; refreshFilteredView(); }
         function refreshFilteredView() {
             if(!currentRootId) return;
             const sm = familyData.find(m => m.id === currentRootId);
-            if (!sm) return;
             const fd = [{ ...sm, parentId: null }, ...familyData.filter(m => isDescendant(currentRootId, m.id))];
             chart.data(fd).render().fit();
         }
-
         function isDescendant(rootId, targetId) { let c = familyData.find(m => m.id === targetId); while (c && c.parentId) { if (c.parentId === rootId) return true; c = familyData.find(m => m.id === c.parentId); } return false; }
-        
-        function resetFocus() { 
-            currentRootId = null; 
-            chart.data(familyData).render().fit(); 
-            switchPage('tree'); 
-        }
-
+        function resetFocus() { currentRootId = null; chart.data(familyData).render().fit(); switchPage('tree'); }
         function toggleNodeMenu(e, id) { e.stopPropagation(); $('.dropdown-content').not(`#menu-${id}`).removeClass('show-menu'); $(`#menu-${id}`).toggleClass('show-menu'); }
         
         function deleteMember(id) { 
-            if (!isAdmin) return; 
-            Swal.fire({title:'Hapus?', icon:'warning', showCancelButton:true}).then(r => { 
+            Swal.fire({title:'Hapus?', text:'Semua keturunan juga akan terhapus!', icon:'warning', showCancelButton:true}).then(r => { 
                 if(r.isConfirmed) { 
                     const ids = [id]; 
                     const findC = (pid) => familyData.filter(d=>d.parentId===pid).forEach(c=>{ids.push(c.id); findC(c.id);}); 
@@ -482,14 +482,35 @@
                     familyData = familyData.filter(d=>!ids.includes(d.id)); 
                     saveData(); 
                     if(currentRootId === id) currentRootId = null;
-                    if(currentRootId) refreshFilteredView(); else chart.data(familyData).render().fit();
+                    currentRootId ? refreshFilteredView() : chart.data(familyData).render().fit();
                     renderTable(); 
                 }
             }); 
         }
 
-        function previewFile() { const f = document.getElementById('swal-file').files[0]; const r = new FileReader(); r.onloadend = () => document.getElementById('preview-img').src = r.result; if (f) r.readAsDataURL(f); }
-        function resetData() { Swal.fire({title:'Reset?', icon:'error', showCancelButton:true}).then(r => { if(r.isConfirmed) { localStorage.removeItem(STORAGE_KEY); location.reload(); }}); }
+        function importData(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if(Array.isArray(data)) { familyData = data; saveData(); location.reload(); }
+                } catch(err) { Swal.fire('Error', 'File tidak valid', 'error'); }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportData() {
+            const dataStr = JSON.stringify(familyData, null, 2);
+            const blob = new Blob([dataStr], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const dl = document.createElement('a');
+            dl.href = url;
+            dl.download = `silsilah_backup_${new Date().toISOString().slice(0,10)}.json`;
+            dl.click();
+        }
+
+        function resetData() { Swal.fire({title:'Reset Semua?', icon:'error', showCancelButton:true}).then(r => { if(r.isConfirmed) { localStorage.clear(); location.reload(); }}); }
         function centerTree() { if (chart) chart.fit(); }
         function updateStats() { $('#stats-count').text(familyData.length + " Anggota"); }
         function switchPage(p) { $('.page-content').addClass('hidden'); $(`#page-${p}`).removeClass('hidden'); $('.menu-item').removeClass('active-menu'); $(`#menu-${p}`).addClass('active-menu'); if (p === 'list') renderTable(); $('#page-title').text(p === 'tree' ? 'Bagan Silsilah' : 'Daftar Anggota'); }
